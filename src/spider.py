@@ -26,7 +26,7 @@ import execjs
 import urllib.request
 from . import JS_SCRIPT_PATH, utils
 from .utils import trace_error_decorator, generate_random_string
-from .logger import script_path
+from .logger import script_path, logger
 from .room import get_sec_user_id, get_unique_id, UnsupportedUrlError
 from .http_clients.async_http import async_req
 from .ab_sign import ab_sign
@@ -97,6 +97,7 @@ async def get_douyin_web_stream_data(url: str, proxy_addr: OptionalStr = None, c
         api += "&a_bogus=" + a_bogus
         try:
             json_str = await async_req(url=api, proxy_addr=proxy_addr, headers=headers)
+            logger.debug(f"Response from Douyin API: {json_str}")
             if not json_str:
                 raise Exception("it triggered risk control")
             json_data = json.loads(json_str)['data']
@@ -104,6 +105,8 @@ async def get_douyin_web_stream_data(url: str, proxy_addr: OptionalStr = None, c
                 raise Exception(f"{url} VR live is not supported")
             room_data = json_data['data'][0]
             room_data['anchor_name'] = json_data['user']['nickname']
+            # 添加真实直播间ID
+            room_data['real_room_id'] = json_data.get('enter_room_id', 'unknown')
         except Exception as e:
             raise Exception(f"Douyin web data fetch error, because {e}.")
 
@@ -168,6 +171,7 @@ async def get_douyin_app_stream_data(url: str, proxy_addr: OptionalStr = None, c
         api2 += "&a_bogus=" + a_bogus
         try:
             json_str2 = await async_req(url=api2, proxy_addr=proxy_addr, headers=headers)
+            logger.debug(f"Response from Douyin API2: {json_str2}")
             if not json_str2:
                 raise Exception("it triggered risk control")
             json_data2 = json.loads(json_str2)['data']
@@ -175,6 +179,8 @@ async def get_douyin_app_stream_data(url: str, proxy_addr: OptionalStr = None, c
                 raise Exception(f"{url} VR live is not supported")
             room_data2 = json_data2['room']
             room_data2['anchor_name'] = room_data2['owner']['nickname']
+            # 添加真实直播间ID
+            room_data2['real_room_id'] = room_data2['owner'].get('web_rid', 'unknown')
             return room_data2
         except Exception as e:
             raise Exception(f"Douyin app data fetch error, because {e}.")

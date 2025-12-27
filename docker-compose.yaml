@@ -1,16 +1,20 @@
 version: '3.8'
 
 services:
-  app:
-    image: ihmily/douyin-live-recorder:latest
+  douyin-live-recorder:
+    #image: ihmily/douyin-live-recorder:latest
     environment:
       - TERM=xterm-256color
+      - TZ=Asia/Shanghai
     tty: true
     stdin_open: true
-    #build: .
+    build:
+      context: ./DouyinLiveRecorder
+      dockerfile: Dockerfile
+    container_name: douyin-live-recorder
     volumes:
       - ./config:/app/config
       - ./logs:/app/logs
       - ./backup_config:/app/backup_config
-      - ./downloads:/app/downloads
+      - /nas_rpa_video_files/big_spider_data/DouyinLiveRecorder:/app/downloads
     restart: always

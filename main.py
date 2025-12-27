@@ -592,6 +592,26 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                                     cookies=dy_cookie))
                             port_info = asyncio.run(
                                 stream.get_douyin_stream_url(json_data, record_quality, proxy_address))
+                            # 获取真实直播间ID
+                            if 'real_room_id' in json_data:
+                                room_id = json_data.get('real_room_id', 'unknown')
+                            elif 'data' in json_data and 'room' in json_data['data'] and 'owner' in json_data['data']['room']:
+                                # 备选方案：从正确的路径获取
+                                room_id = json_data['data']['room']['owner'].get('web_rid', 'unknown')
+                            else:
+                                # 从URL中提取room_id
+                                room_id = record_url.split('live.douyin.com/')[-1].split('?')[0] if 'live.douyin.com/' in record_url else 'unknown'
+
+                            port_info['room_id'] = room_id
+
+                            # 添加dy_id获取逻辑
+                            if 'web_rid' in json_data.get('data', {}).get('room', {}):
+                                dy_id = json_data.get('data',{}).get('room',{}).get('web_rid', 'unknown')
+                            else:
+                                # 从URL中提取room_id
+                                dy_id = record_url.split('live.douyin.com/')[-1].split('?')[0] if 'live.douyin.com/' in record_url else 'unknown'
+                            port_info['dy_id'] = dy_id
+
 
                     elif record_url.find("https://www.tiktok.com/") > -1:
                         platform = 'TikTok直播'
@@ -1119,10 +1139,13 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                             if real_url:
                                 now = datetime.datetime.today().strftime("%Y-%m-%d_%H-%M-%S")
                                 live_title = port_info.get('title')
+                                logger.debug(f'live_title is {live_title}')
+                                room_id = port_info.get('room_id', 'unknown')
                                 title_in_name = ''
                                 if live_title:
                                     live_title = clean_name(live_title)
                                     title_in_name = live_title + '_' if filename_by_title else ''
+                                    logger.debug(f'title_in_name is {title_in_name}')
 
                                 try:
                                     if len(video_save_path) > 0:
@@ -1207,6 +1230,7 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                                 start_record_time = datetime.datetime.now()
                                 recording_time_list[record_name] = [start_record_time, record_quality_zh]
                                 rec_info = f"\r{anchor_name} 准备开始录制视频: {full_path}"
+                                logger.info(rec_info)
                                 if show_url:
                                     re_plat = ('WinkTV', 'PandaTV', 'ShowRoom', 'CHZZK', 'Youtube')
                                     if platform in re_plat:
@@ -1240,7 +1264,7 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                                         now = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
                                         extension = "mp3" if "m4a" not in record_save_type.lower() else "m4a"
                                         name_format = "_%03d" if split_video_by_time else ""
-                                        save_file_path = (f"{full_path}/{anchor_name}_{title_in_name}{now}"
+                                        save_file_path = (f"{full_path}/{dy_id}_{room_id}_{anchor_name}_{title_in_name}_{now}"
                                                           f"{name_format}.{extension}")
 
                                         if split_video_by_time:
@@ -1307,7 +1331,7 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
 
                                 if only_flv_record:
                                     logger.info(f"Use Direct Downloader to Download FLV Stream: {record_url}")
-                                    filename = anchor_name + f'_{title_in_name}' + now + '.flv'
+                                    filename = f'{dy_id}_{room_id}_{anchor_name}_{title_in_name}_' + now + '.flv'
                                     save_file_path = f'{full_path}/{filename}'
                                     print(f'{rec_info}/{filename}')
 
@@ -1350,14 +1374,14 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                                             error_window.append(1)
 
                                 elif record_save_type == "FLV":
-                                    filename = anchor_name + f'_{title_in_name}' + now + ".flv"
+                                    filename =  f'{dy_id}_{room_id}_{anchor_name}_{title_in_name}_' + now + ".flv"
                                     print(f'{rec_info}/{filename}')
                                     save_file_path = full_path + '/' + filename
 
                                     try:
                                         if split_video_by_time:
                                             now = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
-                                            save_file_path = f"{full_path}/{anchor_name}_{title_in_name}{now}_%03d.flv"
+                                            save_file_path = f"{full_path}/{room_id}_{anchor_name}_{title_in_name}_{now}_%03d.flv"
                                             command = [
                                                 "-map", "0",
                                                 "-c:v", "copy",
@@ -1399,7 +1423,7 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
 
                                     try:
                                         if converts_to_mp4:
-                                            seg_file_path = f"{full_path}/{anchor_name}_{title_in_name}{now}_%03d.mp4"
+                                            seg_file_path = f"{full_path}/{dy_id}_{room_id}_{anchor_name}_{title_in_name}_{now}_%03d.mp4"
                                             if split_video_by_time:
                                                 segment_video(
                                                     save_file_path, seg_file_path,
@@ -1413,7 +1437,7 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                                                 ).start()
 
                                         else:
-                                            seg_file_path = f"{full_path}/{anchor_name}_{title_in_name}{now}_%03d.flv"
+                                            seg_file_path = f"{full_path}/{dy_id}_{room_id}_{anchor_name}_{title_in_name}_{now}_%03d.flv"
                                             if split_video_by_time:
                                                 segment_video(
                                                     save_file_path, seg_file_path,
@@ -1424,14 +1448,14 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                                         logger.error(f"转码失败: {e} ")
 
                                 elif record_save_type == "MKV":
-                                    filename = anchor_name + f'_{title_in_name}' + now + ".mkv"
+                                    filename = f'{dy_id}_{room_id}_{anchor_name}_{title_in_name}_' + now + ".mkv"
                                     print(f'{rec_info}/{filename}')
                                     save_file_path = full_path + '/' + filename
 
                                     try:
                                         if split_video_by_time:
                                             now = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
-                                            save_file_path = f"{full_path}/{anchor_name}_{title_in_name}{now}_%03d.mkv"
+                                            save_file_path = f"{full_path}/{dy_id}_{room_id}_{anchor_name}_{title_in_name}_{now}_%03d.mkv"
                                             command = [
                                                 "-flags", "global_header",
                                                 "-c:v", "copy",
@@ -1472,14 +1496,14 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                                             error_window.append(1)
 
                                 elif record_save_type == "MP4":
-                                    filename = anchor_name + f'_{title_in_name}' + now + ".mp4"
+                                    filename = f'{dy_id}_{room_id}_{anchor_name}_{title_in_name}_' + now + ".mp4"
                                     print(f'{rec_info}/{filename}')
                                     save_file_path = full_path + '/' + filename
 
                                     try:
                                         if split_video_by_time:
                                             now = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
-                                            save_file_path = f"{full_path}/{anchor_name}_{title_in_name}{now}_%03d.mp4"
+                                            save_file_path = f"{full_path}/{dy_id}_{room_id}_{anchor_name}_{title_in_name}_{now}_%03d.mp4"
                                             command = [
                                                 "-c:v", "copy",
                                                 "-c:a", "aac",
@@ -1521,11 +1545,11 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                                 else:
                                     if split_video_by_time:
                                         now = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
-                                        filename = anchor_name + f'_{title_in_name}' + now + ".ts"
+                                        filename =  f'{dy_id}_{room_id}_{anchor_name}_{title_in_name}_' + now + ".ts"
                                         print(f'{rec_info}/{filename}')
 
                                         try:
-                                            save_file_path = f"{full_path}/{anchor_name}_{title_in_name}{now}_%03d.ts"
+                                            save_file_path = f"{full_path}/{dy_id}_{room_id}_{anchor_name}_{title_in_name}_{now}_%03d.ts"
                                             command = [
                                                 "-c:v", "copy",
                                                 "-c:a", "copy",
@@ -1568,7 +1592,7 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                                                 error_window.append(1)
 
                                     else:
-                                        filename = anchor_name + f'_{title_in_name}' + now + ".ts"
+                                        filename = f'{room_id}_{anchor_name}_{title_in_name}_' + now + ".ts"
                                         print(f'{rec_info}/{filename}')
                                         save_file_path = full_path + '/' + filename
 
