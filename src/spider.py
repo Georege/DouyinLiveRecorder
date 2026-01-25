@@ -364,6 +364,33 @@ async def get_kuaishou_stream_data(url: str, proxy_addr: OptionalStr = None, coo
             play_url_list = play_list['liveStream']['playUrls'][0]['adaptationSet']['representation']
         result.update({"flv_url_list": play_url_list, "is_live": True})
 
+    # 尝试从URL中提取user_id和room_id作为备份
+    try:
+        # 提取user_id
+        if 'author' in play_list and 'id' in play_list['author']:
+            result['user_id'] = play_list['author']['id']
+        else:
+            # 从URL中提取
+            if '/u/' in url:
+                result['user_id'] = url.split('/u/')[1].strip().split('?')[0]
+            else:
+                result['user_id'] = 'None'
+        
+        # 提取room_id
+        if 'liveStream' in play_list and 'id' in play_list['liveStream']:
+            result['room_id'] = play_list['liveStream']['id']
+        else:
+            # 从URL中提取
+            if 'live.kuaishou.com/' in url:
+                room_id_part = url.split('live.kuaishou.com/')[1].strip().split('?')[0]
+                result['room_id'] = room_id_part.split('/')[-1]
+            else:
+                result['room_id'] = 'None'
+    except Exception as e:
+        print(f"Failed to extract user_id/room_id: {e}")
+        result['user_id'] = 'None'
+        result['room_id'] = 'None'
+
     return result
 
 
@@ -403,6 +430,8 @@ async def get_kuaishou_stream_data2(url: str, proxy_addr: OptionalStr = None, co
                 flv_url_list = live_stream['multiResolutionPlayUrls'][0]['urls']
                 result['flv_url_list'] = flv_url_list
             result['backup'] = {'m3u8_url': backup_m3u8_url, 'flv_url': backup_flv_url}
+        # 添加 user_id 字段，使用提取的 eid 作为值
+        result['user_id'] = eid
         if result['anchor_name']:
             return result
     except Exception as e:
@@ -813,7 +842,9 @@ async def get_xhs_stream_url(url: str, proxy_addr: OptionalStr = None, cookies: 
                         "title": title,
                         "flv_url": flv_url,
                         "m3u8_url": m3u8_url,
-                        'record_url': flv_url
+                        "record_url": flv_url,
+                        "room_id": room_id,
+                        "user_id": user_id
                     }
                     return result
 

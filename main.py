@@ -31,6 +31,7 @@ from src import spider, stream
 from src.proxy import ProxyDetector
 from src.utils import logger
 from src import utils
+from src.danmaku import DouyinDanmaku, KuaishouDanmaku, XiaohongshuDanmaku
 from msg_push import (
     dingtalk, xizhi, tg_bot, send_email, bark, ntfy, pushplus
 )
@@ -1140,7 +1141,16 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                                 now = datetime.datetime.today().strftime("%Y-%m-%d_%H-%M-%S")
                                 live_title = port_info.get('title')
                                 logger.debug(f'live_title is {live_title}')
-                                room_id = port_info.get('room_id', 'unknown')
+                                room_id = port_info.get('room_id', 'None')
+                                # 对于不同平台处理 dy_id
+                                if platform == '抖音直播':
+                                    dy_id = port_info.get('dy_id', 'None')
+                                elif platform == '小红书直播' or platform == '快手直播':
+                                    # 小红书和快手平台使用 user_id 作为账号ID
+                                    dy_id = port_info.get('user_id', 'None')
+                                else:
+                                    # 其他平台使用 room_id 作为近似值
+                                    dy_id = room_id
                                 title_in_name = ''
                                 if live_title:
                                     live_title = clean_name(live_title)
@@ -1225,6 +1235,68 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                                 if proxy_address:
                                     ffmpeg_command.insert(1, "-http_proxy")
                                     ffmpeg_command.insert(2, proxy_address)
+
+                                # 启动弹幕获取
+                                danmaku_instance = None
+                                danmaku_task = None
+                                if platform in ['抖音直播', '快手直播', '小红书直播']:
+                                    room_id = port_info.get('room_id', '')
+                                    if not room_id:
+                                        # 从URL中提取room_id
+                                        if 'douyin.com/' in record_url:
+                                            room_id = record_url.split('live.douyin.com/')[-1].split('?')[0]
+                                        elif 'kuaishou.com/' in record_url:
+                                            # 提取room_id并处理可能的斜杠
+                                            room_id_part = record_url.split('live.kuaishou.com/')[-1].split('?')[0]
+                                            # 只取最后一部分作为room_id
+                                            room_id = room_id_part.split('/')[-1]
+                                        elif 'xiaohongshu.com/' in record_url:
+                                            room_id = record_url.split('/')[-1].split('?')[0]
+                                    
+                                    if room_id:
+                                        # 处理代理地址，避免传递空字符串
+                                        proxy = proxy_address if proxy_address else None
+                                        if platform == '抖音直播':
+                                            danmaku_instance = DouyinDanmaku(room_id, proxy, logger)
+                                        elif platform == '快手直播':
+                                            danmaku_instance = KuaishouDanmaku(room_id, proxy, logger)
+                                        elif platform == '小红书直播':
+                                            danmaku_instance = XiaohongshuDanmaku(room_id, proxy, logger)
+                                        
+                                        if danmaku_instance:
+                                            # 连接弹幕服务器
+                                            asyncio.run(danmaku_instance.connect())
+                                            # 启动弹幕获取任务
+                                            async def danmaku_capture_task():
+                                                danmaku_file = None
+                                                try:
+                                                    # 清理 room_id 中的特殊字符，避免路径错误
+                                                    clean_room_id = clean_name(room_id)
+                                                    # 创建弹幕文件
+                                                    danmaku_filename = f"{full_path}/{dy_id}_{clean_room_id}_{anchor_name}_{title_in_name}_{now}.danmaku.jsonl"
+                                                    danmaku_file = open(danmaku_filename, 'a', encoding='utf-8')
+                                                    
+                                                    while record_name in recording:
+                                                        danmakus = await danmaku_instance.get_danmaku()
+                                                        for danmaku in danmakus:
+                                                            # 写入弹幕文件
+                                                            import json
+                                                            danmaku_file.write(json.dumps(danmaku, ensure_ascii=False) + '\n')
+                                                            danmaku_file.flush()
+                                                        await asyncio.sleep(0.1)
+                                                except Exception as e:
+                                                    print(f"弹幕获取失败: {e}")
+                                                finally:
+                                                    if danmaku_file:
+                                                        danmaku_file.close()
+                                                    if danmaku_instance:
+                                                        await danmaku_instance.disconnect()
+                                            
+                                            # 使用线程运行弹幕获取任务
+                                            danmaku_task = threading.Thread(target=lambda: asyncio.run(danmaku_capture_task()))
+                                            danmaku_task.daemon = True
+                                            danmaku_task.start()
+                                            print(f"[{anchor_name}] 弹幕获取已启动")
 
                                 recording.add(record_name)
                                 start_record_time = datetime.datetime.now()
