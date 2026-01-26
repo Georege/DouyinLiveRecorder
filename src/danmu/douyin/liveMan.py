@@ -153,6 +153,9 @@ class DouyinLiveWebFetcher:
         self.headers = {
             'User-Agent': self.user_agent
         }
+        # 添加弹幕缓冲区
+        self.danmaku_buffer = []
+        self.max_buffer_size = 1000
     
     def start(self):
         self._connectWebSocket()
@@ -160,6 +163,31 @@ class DouyinLiveWebFetcher:
     def stop(self):
         if hasattr(self, 'ws') and self.ws:
             self.ws.close()
+    
+    def _add_to_buffer(self, danmaku_data: dict):
+        """
+        将弹幕数据添加到缓冲区
+        
+        Args:
+            danmaku_data: 弹幕数据字典
+        """
+        self.danmaku_buffer.append(danmaku_data)
+        # 保持缓冲区大小在限制内
+        if len(self.danmaku_buffer) > self.max_buffer_size:
+            self.danmaku_buffer = self.danmaku_buffer[-self.max_buffer_size:]
+    
+    def get_danmaku_buffer(self):
+        """
+        获取缓冲区中的弹幕数据并清空缓冲区
+        
+        Returns:
+            list: 缓冲区中的弹幕数据列表
+        """
+        result = []
+        if self.danmaku_buffer:
+            result = self.danmaku_buffer.copy()
+            self.danmaku_buffer = []
+        return result
     
     @property
     def ttwid(self):
@@ -452,6 +480,19 @@ class DouyinLiveWebFetcher:
         user_id = message.user.id
         content = message.content
         logger.info(f"【聊天msg】[{user_id}]{user_name}: {content}")
+        # 将弹幕数据存入缓冲区
+        import time
+        danmaku_data = {
+            "id": str(int(time.time() * 1000)),
+            "timestamp": int(time.time() * 1000),
+            "user_id": user_id,
+            "username": user_name,
+            "content": content,
+            "type": "chat",
+            "platform": "douyin",
+            "room_id": self.room_id
+        }
+        self._add_to_buffer(danmaku_data)
     
     def _parseGiftMsg(self, payload):
         """礼物消息"""
@@ -460,6 +501,21 @@ class DouyinLiveWebFetcher:
         gift_name = message.gift.name
         gift_cnt = message.combo_count
         logger.info(f"【礼物msg】{user_name} 送出了 {gift_name}x{gift_cnt}")
+        # 将弹幕数据存入缓冲区
+        import time
+        danmaku_data = {
+            "id": str(int(time.time() * 1000)),
+            "timestamp": int(time.time() * 1000),
+            "user_id": message.user.id,
+            "username": user_name,
+            "content": f"赠送 {gift_name}x{gift_cnt}",
+            "type": "gift",
+            "gift_name": gift_name,
+            "gift_count": gift_cnt,
+            "platform": "douyin",
+            "room_id": self.room_id
+        }
+        self._add_to_buffer(danmaku_data)
     
     def _parseLikeMsg(self, payload):
         '''点赞消息'''
@@ -467,6 +523,20 @@ class DouyinLiveWebFetcher:
         user_name = message.user.nick_name
         count = message.count
         logger.info(f"【点赞msg】{user_name} 点了{count}个赞")
+        # 将弹幕数据存入缓冲区
+        import time
+        danmaku_data = {
+            "id": str(int(time.time() * 1000)),
+            "timestamp": int(time.time() * 1000),
+            "user_id": message.user.id,
+            "username": user_name,
+            "content": f"点了{count}个赞",
+            "type": "like",
+            "like_count": count,
+            "platform": "douyin",
+            "room_id": self.room_id
+        }
+        self._add_to_buffer(danmaku_data)
     
     def _parseMemberMsg(self, payload):
         '''进入直播间消息'''
@@ -475,6 +545,20 @@ class DouyinLiveWebFetcher:
         user_id = message.user.id
         gender = ["女", "男"][message.user.gender]
         logger.info(f"【进场msg】[{user_id}][{gender}]{user_name} 进入了直播间")
+        # 将弹幕数据存入缓冲区
+        import time
+        danmaku_data = {
+            "id": str(int(time.time() * 1000)),
+            "timestamp": int(time.time() * 1000),
+            "user_id": user_id,
+            "username": user_name,
+            "content": f"进入直播间",
+            "type": "enter",
+            "gender": gender,
+            "platform": "douyin",
+            "room_id": self.room_id
+        }
+        self._add_to_buffer(danmaku_data)
     
     def _parseSocialMsg(self, payload):
         '''关注消息'''
@@ -482,6 +566,19 @@ class DouyinLiveWebFetcher:
         user_name = message.user.nick_name
         user_id = message.user.id
         logger.info(f"【关注msg】[{user_id}]{user_name} 关注了主播")
+        # 将弹幕数据存入缓冲区
+        import time
+        danmaku_data = {
+            "id": str(int(time.time() * 1000)),
+            "timestamp": int(time.time() * 1000),
+            "user_id": user_id,
+            "username": user_name,
+            "content": "关注了主播",
+            "type": "follow",
+            "platform": "douyin",
+            "room_id": self.room_id
+        }
+        self._add_to_buffer(danmaku_data)
     
     def _parseRoomUserSeqMsg(self, payload):
         '''直播间统计'''

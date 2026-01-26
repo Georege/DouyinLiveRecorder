@@ -85,14 +85,13 @@ class DouyinDanmaku(DanmakuBase):
     async def get_danmaku(self) -> List[Dict[str, Any]]:
         """
         获取抖音弹幕数据
-        注意：DouyinLiveWebFetcher 内部已经处理了消息解析和日志输出
-        这里主要用于兼容接口，实际消息处理在 liveMan 中完成
+        从 DouyinLiveWebFetcher 的缓冲区中获取已解析的弹幕数据
 
         Returns:
-            List[Dict[str, Any]]: 弹幕数据列表（空列表，因为消息已由fetcher处理）
+            List[Dict[str, Any]]: 弹幕数据列表
         """
-        # DouyinLiveWebFetcher 内部已经通过解析 protobuf 消息并输出日志
-        # 这个方法返回空列表以保持接口兼容性
+        if self.fetcher:
+            return self.fetcher.get_danmaku_buffer()
         return []
 
     async def _process_message(self, message: Any) -> Optional[Dict[str, Any]]:
