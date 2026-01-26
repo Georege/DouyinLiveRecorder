@@ -31,7 +31,7 @@ from src import spider, stream
 from src.proxy import ProxyDetector
 from src.utils import logger
 from src import utils
-from src.danmaku import DouyinDanmaku, KuaishouDanmaku, XiaohongshuDanmaku
+from src.danmu import DouyinDanmaku, KuaishouDanmaku, XiaohongshuDanmaku
 from msg_push import (
     dingtalk, xizhi, tg_bot, send_email, bark, ntfy, pushplus
 )
@@ -1237,6 +1237,7 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                                     ffmpeg_command.insert(2, proxy_address)
 
                                 # 启动弹幕获取
+                                logger.debug(f'启动弹幕获取')
                                 danmaku_instance = None
                                 danmaku_task = None
                                 if platform in ['抖音直播', '快手直播', '小红书直播']:
@@ -1253,11 +1254,12 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                                         elif 'xiaohongshu.com/' in record_url:
                                             room_id = record_url.split('/')[-1].split('?')[0]
                                     
+                                    logger.debug(f'room_id is {room_id}')
                                     if room_id:
                                         # 处理代理地址，避免传递空字符串
                                         proxy = proxy_address if proxy_address else None
                                         if platform == '抖音直播':
-                                            danmaku_instance = DouyinDanmaku(room_id, proxy, logger)
+                                            danmaku_instance = DouyinDanmaku(room_id, proxy, logger, cookies=dy_cookie)
                                         elif platform == '快手直播':
                                             danmaku_instance = KuaishouDanmaku(room_id, proxy, logger)
                                         elif platform == '小红书直播':
@@ -1273,7 +1275,7 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                                                     # 清理 room_id 中的特殊字符，避免路径错误
                                                     clean_room_id = clean_name(room_id)
                                                     # 创建弹幕文件
-                                                    danmaku_filename = f"{full_path}/{dy_id}_{clean_room_id}_{anchor_name}_{title_in_name}_{now}.danmaku.jsonl"
+                                                    danmaku_filename = f"{full_path}/{dy_id}_{clean_room_id}_{anchor_name}_{title_in_name}_{now}.danmu.json"
                                                     danmaku_file = open(danmaku_filename, 'a', encoding='utf-8')
                                                     
                                                     while record_name in recording:

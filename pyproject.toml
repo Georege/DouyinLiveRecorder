@@ -15,6 +15,9 @@ dependencies = [
     "httpx[http2]>=0.28.1",
     "PyExecJS>=1.5.1",
     "websockets>=16.0",
+    "websocket-client>=1.9.0",
+    "py-mini-racer>=0.6.0",
+    "betterproto>=1.2.5",
 ]
 
 [project.urls]

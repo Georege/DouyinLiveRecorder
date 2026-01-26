@@ -100,13 +100,18 @@ async def get_douyin_web_stream_data(url: str, proxy_addr: OptionalStr = None, c
             logger.debug(f"Response from Douyin API: {json_str}")
             if not json_str:
                 raise Exception("it triggered risk control")
-            json_data = json.loads(json_str)['data']
-            if not json_data['data']:
-                raise Exception(f"{url} VR live is not supported")
-            room_data = json_data['data'][0]
-            room_data['anchor_name'] = json_data['user']['nickname']
+            json_data = json.loads(json_str)
+            if json_data.get('status_code') != 0:
+                raise Exception(f"API returned error status code: {json_data.get('status_code')}")
+            if not json_data.get('data'):
+                raise Exception("API returned empty data")
+            data = json_data['data']
+            if not data.get('data'):
+                raise Exception(f"{url} VR live is not supported or content is unavailable")
+            room_data = data['data'][0]
+            room_data['anchor_name'] = data.get('user', {}).get('nickname', '')
             # 添加真实直播间ID
-            room_data['real_room_id'] = json_data.get('enter_room_id', 'unknown')
+            room_data['real_room_id'] = data.get('enter_room_id', 'unknown')
         except Exception as e:
             raise Exception(f"Douyin web data fetch error, because {e}.")
 
@@ -242,10 +247,14 @@ async def get_douyin_stream_data(url: str, proxy_addr: OptionalStr = None, cooki
     }
     if cookies:
         headers['Cookie'] = cookies
+        logger.info(f"[DEBUG] get_douyin_stream_data: 使用传入的cookies (长度: {len(cookies)} 字符)")
+    else:
+        logger.warning(f"[DEBUG] get_douyin_stream_data: 未传入cookies，使用默认cookie")
 
     try:
         origin_url_list = None
         html_str = await async_req(url=url, proxy_addr=proxy_addr, headers=headers)
+        logger.debug(f"[DEBUG] get_douyin_stream_data 响应长度: {len(html_str)} 字符, 前200字符: {html_str[:200] if len(html_str) > 200 else html_str}")
         match_json_str = re.search(r'(\{\\"state\\":.*?)]\\n"]\)', html_str)
         if not match_json_str:
             match_json_str = re.search(r'(\{\\"common\\":.*?)]\\n"]\)</script><div hidden', html_str)
