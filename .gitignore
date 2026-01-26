@@ -165,3 +165,12 @@ cython_debug/
 #.idea/
 
 backup_config/
+
+# 第一步：先排除 config 目录下的所有内容（文件+子目录）
+config/*
+
+# 第二步：反向保留 config/config.ini 文件（! 表示不忽略）
+!config/config.ini
+
+# 关键补充：防止 Git 忽略空目录（如果需要保留 config 目录结构）
+!config/
