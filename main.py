@@ -1261,7 +1261,7 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                                         if platform == '抖音直播':
                                             danmaku_instance = DouyinDanmaku(room_id, proxy, logger, cookies=dy_cookie)
                                         elif platform == '快手直播':
-                                            danmaku_instance = KuaishouDanmaku(room_id, proxy, logger)
+                                            danmaku_instance = KuaishouDanmaku(room_id, proxy, logger, cookies=ks_cookie)
                                         elif platform == '小红书直播':
                                             danmaku_instance = XiaohongshuDanmaku(room_id, proxy, logger)
                                         
