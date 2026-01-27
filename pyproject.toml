@@ -18,6 +18,8 @@ dependencies = [
     "websocket-client>=1.9.0",
     "py-mini-racer>=0.6.0",
     "betterproto>=1.2.5",
+    "protobuf>=6.33.4",
+    "bbpb>=1.4.2",
 ]
 
 [project.urls]
