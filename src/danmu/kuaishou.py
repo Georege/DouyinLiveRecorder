@@ -530,6 +530,18 @@ class KuaishouDanmaku(DanmakuBase):
         
         Args:
             ws: websocket-client连接实例
+
+        发起消息结构：
+        # 构成：
+        1.开头特征
+        2.Token
+        3.分隔符
+        4.liveStreamId:
+        5.分隔符
+        6.page_id(kslive.log.page_id)(固定的16位字符串_时间戳)
+
+        # 格式： 
+        开头特征 + Token + 分隔符 + liveStreamId: + 分隔符 + page_id
         """
         try:
             self.logger.info(f"[{self.platform}] WebSocket连接建立，正在发送进房包...")
@@ -537,18 +549,16 @@ class KuaishouDanmaku(DanmakuBase):
             # 获取各部分数据
             token = self.token  # 已经是Base64编码的
             session_id = self.room_id
-            timestamp = str(int(time.time() * 1000))
             
             # 生成与浏览器一致的时间戳前缀（随机字符串）
             import random
             import string
+            # # page_id的随机生成，但并不随机
+            timestamp = str(int(time.time() * 1000))
             # timestamp_prefix = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
-            charset = "bjectSymhasOwnProp-0123456789ABCDEFGHIJKLMNQRTUVWXYZ_dfgiklquvxz"
-            timestamp_prefix = ''.join(random.choices(charset, k=16))
-            full_timestamp = f"{timestamp_prefix}_{timestamp}"
-            
-            # 构造消息
-            # 格式：开头特征 + Token + 分隔符 + Session ID: + 分隔符 + 时间戳前缀_时间戳
+            # charset = "bjectSymhasOwnProp-0123456789ABCDEFGHIJKLMNQRTUVWXYZ_dfgiklquvxz"
+            # timestamp_prefix = ''.join(random.choices(charset, k=16))
+            page_id = "lQ-qwSuHNFfNYCCO_1769669970604"
             
             # 开头特征：使用与浏览器完全一致的起始特征
             '''
@@ -565,15 +575,16 @@ class KuaishouDanmaku(DanmakuBase):
             separator2 = b'\x12\x0b'
             session_part = f"{session_id}:".encode('utf-8')  # 注意添加冒号
             separator3 = b'\x1e'
-            timestamp_part = full_timestamp.encode('utf-8')
+            page_id_part = page_id.encode('utf-8')
             
-            self.logger.debug(f"[{self.platform}] 消息长度: {len(msg)}")
             self.logger.debug(f"[{self.platform}] Token: {token}")
             self.logger.debug(f"[{self.platform}] Session ID: {session_id}")
-            self.logger.debug(f"[{self.platform}] 完整时间戳: {full_timestamp}")
+            self.logger.debug(f"[{self.platform}] page_id: {page_id}")
 
             # 构造完整消息
-            msg = start_marker + separator1 + token_bytes + separator2 + session_part + separator3 + timestamp_part
+            # 格式： 开头特征 + Token + 分隔符 + liveStreamId: + 分隔符 + page_id
+            msg = start_marker + separator1 + token_bytes + separator2 + session_part + separator3 + page_id_part
+            self.logger.debug(f"[{self.platform}] 消息长度: {len(msg)}")
             self.logger.debug(f'[{self.platform}] 组合后hex值是：{msg}')
             # 打印组合后的内容（按utf-8格式）
             try:

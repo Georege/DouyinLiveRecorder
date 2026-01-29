@@ -1,12 +1,12 @@
 // ==========================================
-// 1. 引入 JSDOM 和 Canvas 来伪造浏览器
+// 1. 引入 JSDOM 和 Canvas
 // ==========================================
 const jsdom = require("jsdom");
 const { JSDOM } = jsdom;
 const { createCanvas } = require("canvas");
 
-// 伪造一个 URL (必须是快手直播间的 URL)
-const url = "https://www.kuaishou.com/new-reco";
+// 伪造直播间 URL
+const url = "https://live.kuaishou.com/u/3xwgei6q9i989";
 
 const dom = new JSDOM(`<!DOCTYPE html><html><body><div id="app"></div></body></html>`, {
     url: url,
@@ -17,7 +17,7 @@ const dom = new JSDOM(`<!DOCTYPE html><html><body><div id="app"></div></body></h
 });
 
 // ==========================================
-// 2. 将 JSDOM 对象挂载到全局 (Global)
+// 2. 补全浏览器环境 (Global)
 // ==========================================
 global.window = dom.window;
 global.document = dom.window.document;
@@ -28,23 +28,32 @@ global.history = dom.window.history;
 global.localStorage = dom.window.localStorage;
 global.sessionStorage = dom.window.sessionStorage;
 
+// 【关键修复】补全 self 和 top，防止报错
+global.self = dom.window;
+global.top = dom.window;
+global.parent = dom.window;
+dom.window.self = dom.window;
+dom.window.top = dom.window;
+
 global.MutationObserver = dom.window.MutationObserver;
 global.XMLHttpRequest = dom.window.XMLHttpRequest;
 
-// Event 相关
+// Event & Listeners
 global.Event = dom.window.Event;
 global.CustomEvent = dom.window.CustomEvent;
 global.MessageEvent = dom.window.MessageEvent;
-
-// 监听函数 bind
 global.addEventListener = dom.window.addEventListener.bind(dom.window);
 global.removeEventListener = dom.window.removeEventListener.bind(dom.window);
 
-// Image 对象
+// Image
 global.Image = dom.window.Image;
 
+// 补 requestAnimationFrame (很多前端库依赖这个)
+global.requestAnimationFrame = function(callback) { return setTimeout(callback, 16); };
+global.cancelAnimationFrame = function(id) { clearTimeout(id); };
+
 // ==========================================
-// 3. 深度补环境 (针对快手风控的补丁)
+// 3. 深度补环境 (风控补丁)
 // ==========================================
 
 // Canvas 模拟
@@ -55,12 +64,11 @@ dom.window.HTMLCanvasElement.prototype.getContext = function (type) {
     return null;
 };
 
-// 隐藏 Node.js 特征 (保留 myProcess 用于最后接收参数)
+// 隐藏 Node 特征
 const myProcess = process; 
-delete global.process;
-// delete global.Buffer; // 保持注释，不要删
+delete global.process; 
 
-// 补全 navigator
+// Navigator
 Object.defineProperties(navigator, {
     userAgent: { value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
     platform: { value: "Win32" },
@@ -69,114 +77,123 @@ Object.defineProperties(navigator, {
     webdriver: { value: false }
 });
 
-// 补全 screen
+// Screen
 Object.defineProperties(screen, {
     width: { value: 1920 },
     height: { value: 1080 },
-    availWidth: { value: 1920 },
-    availHeight: { value: 1040 },
     colorDepth: { value: 24 }
 });
 
-// ==========================================
-// 4. 【核心新增】Hook 逻辑 (必须在加载 core.js 之前)
-// ==========================================
-console.log("正在初始化环境并设置 Hook...");
+// 拦截 Vite 预加载
+global.__vitePreload = function() { return Promise.resolve({}); };
 
+// ==========================================
+// 4. 【核心 Hook】Function.prototype.call
+// ==========================================
+console.log(">>> 初始化 Hook 监控...");
+
+// 只要快手源码运行，它必然通过 call("$encode") 来调用
 const originalCall = Function.prototype.call;
 Function.prototype.call = function (thisArg, ...args) {
-    // 监听是否调用了 "$encode" 指令
+    // 监听调用参数
     if (thisArg === "$encode") {
         if (!global.KS_EncInstance) {
             console.log(">>> [Hook 成功] 捕获到加密实例 e !");
-            global.KS_EncInstance = this; // 保存到全局
+            global.KS_EncInstance = this; // 锁定目标
         }
     }
     return originalCall.apply(this, [thisArg, ...args]);
 };
 
 // ==========================================
-// 5. 导入快手源码
+// 5. 加载源码 & 主动触发
 // ==========================================
 try {
-    require("./core.js");
+    // 假设你的 JS 文件名是 app.cafa96e5de9023c78a6b.js
+    // 这里的返回值通常是 Webpack 的导出对象
+    const lib = require("./app.cafa96e5de9023c78a6b.js");
+    
+    // 【主动触发策略】
+    // 很多时候代码加载了但不执行，我们需要去"戳"它一下
+    // 尝试寻找导出对象里是否有 init, main, setup 之类的方法并执行
+    if (lib && typeof lib === 'function') {
+        try { lib(); } catch(e){}
+    }
+    
+    // 如果 main 是全局函数，尝试调用
+    if (typeof main === 'function') {
+        console.log(">>> 尝试手动执行 main()...");
+        main();
+    }
+    
 } catch (e) {
-    console.error("加载 core.js 时发生错误 (非致命错误可忽略):", e.message);
+    console.error("加载源码出错 (非致命可忽略):", e.message);
 }
 
 // ==========================================
 // 6. Token 生成函数
 // ==========================================
-
 function get_token(url, query_params) {
     return new Promise((resolve, reject) => {
-        const enc = global.KS_EncInstance || window.KS_EncInstance;
+        const enc = global.KS_EncInstance;
         
         if (!enc) {
-            reject("错误：未捕获到加密实例 (KS_EncInstance 为空)，请检查 core.js 是否正常运行或 Hook 是否生效");
+            reject("Error: 加密对象未捕获。可能原因：1.源码未执行到加密初始化 2.变量名混淆导致 Hook 失效");
             return;
         }
 
-        // 构造 payload
         const payload = {
             url: url,
-            query: query_params || {},
+            query: query_params || { caver: "2" },
             form: {},
             requestBody: {}
         };
-        
         // 自动补全 caver
-        if (!payload.query.caver) {
-            payload.query.caver = "2";
-        }
+        if (!payload.query.caver) { payload.query.caver = "2"; }
 
         try {
+            // 使用 call 调用 (这是最原生的方式)
             enc.call("$encode", [payload, {
                 suc: (res) => resolve(res),
                 err: (err) => reject(err)
             }]);
         } catch (error) {
-            reject("执行加密出错: " + error);
+            reject("调用出错: " + error.message);
         }
     });
 }
 
 // ==========================================
-// 7. 执行逻辑 (CLI 参数 或 默认测试)
+// 7. 执行测试
 // ==========================================
-
 const args = myProcess.argv.slice(2);
 
-if (args.length > 0) {
-    // 模式 A: 供 Python 调用 (传入 JSON 字符串)
-    try {
-        const params = JSON.parse(args[0]);
-        const targetUrl = params.url || "/rest/v/profile/get";
-        const targetQuery = params.query || {};
+// 默认测试参数
+const testUrl = "/rest/v/profile/get";
+const testQuery = { "caver": "2" };
 
-        get_token(targetUrl, targetQuery)
-            .then(token => console.log(token))
-            .catch(err => console.error("Error:", err));
-    } catch (e) {
-        console.error("JSON 解析失败:", e);
-    }
-} else {
-    // 模式 B: 直接运行测试 (node ks_env.js)
-    console.log("未传入参数，执行默认测试...");
-    const testUrl = "/rest/v/profile/get";
-    const testQuery = { "caver": "2" };
-
-    // 等待一小会儿确保 core.js 初始化完成
-    setTimeout(() => {
-        get_token(testUrl, testQuery)
-            .then(token => {
+// 延时执行，给 core.js 一点初始化时间
+setTimeout(() => {
+    if (global.KS_EncInstance) {
+        console.log("\n>>> 加密实例已就绪，开始生成...");
+        // 如果有外部参数则用外部参数，否则跑默认测试
+        if (args.length > 0) {
+            try {
+                const p = JSON.parse(args[0]);
+                get_token(p.url, p.query).then(console.log).catch(console.error);
+            } catch(e) { console.error("参数解析失败"); }
+        } else {
+            get_token(testUrl, testQuery).then(t => {
                 console.log("\n====== 生成成功 ======");
-                console.log(token);
+                console.log(t);
                 console.log("======================");
-            })
-            .catch(err => {
-                console.error("\n====== 生成失败 ======");
-                console.error(err);
-            });
-    }, 1000);
-}
+            }).catch(console.error);
+        }
+    } else {
+        console.error("\n>>> [失败] 超时仍未捕获到加密实例。");
+        console.error("建议方案：");
+        console.error("1. 检查 app.js 里是否有 'self is not defined' 报错 (已修复)");
+        console.error("2. 检查 app.js 底部是否注释掉了 main() (请取消注释)");
+        console.error("3. 在 app.js 搜索 'initLogger'，在第一行手动加 window.KS_EncInstance = e");
+    }
+}, 2000);
