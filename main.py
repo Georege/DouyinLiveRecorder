@@ -1242,7 +1242,9 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                                 danmaku_task = None
                                 if platform in ['抖音直播', '快手直播', '小红书直播']:
                                     room_id = port_info.get('room_id', '')
+                                    user_id = port_info.get('user_id', '')
                                     if not room_id:
+                                        logger.warning(f'原生代码获取room_id失败，手动获取')
                                         # 从URL中提取room_id
                                         if 'douyin.com/' in record_url:
                                             room_id = record_url.split('live.douyin.com/')[-1].split('?')[0]
@@ -1251,17 +1253,24 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                                             room_id_part = record_url.split('live.kuaishou.com/')[-1].split('?')[0]
                                             # 只取最后一部分作为room_id
                                             room_id = room_id_part.split('/')[-1]
+                                            # 尝试提取user_id
+                                            if 'u/' in room_id_part:
+                                                user_id = room_id_part.split('u/')[-1].split('/')[0]
                                         elif 'xiaohongshu.com/' in record_url:
                                             room_id = record_url.split('/')[-1].split('?')[0]
+                                    else:
+                                        logger.warning(f'原生代码获取room_id成功')
                                     
-                                    logger.debug(f'room_id is {room_id}')
+                                    logger.debug(f'弹幕获取 room_id is {room_id}')
+                                    logger.debug(f'弹幕获取 user_id is {user_id}')
                                     if room_id:
                                         # 处理代理地址，避免传递空字符串
                                         proxy = proxy_address if proxy_address else None
                                         if platform == '抖音直播':
                                             danmaku_instance = DouyinDanmaku(room_id, proxy, logger, cookies=dy_cookie)
                                         elif platform == '快手直播':
-                                            danmaku_instance = KuaishouDanmaku(room_id, proxy, logger, cookies=ks_cookie)
+                                            # 快手直播使用user_id作为ks_id room_id作为liveStreamId
+                                            danmaku_instance = KuaishouDanmaku(room_id, user_id, proxy, logger, cookies=ks_cookie)
                                         elif platform == '小红书直播':
                                             danmaku_instance = XiaohongshuDanmaku(room_id, proxy, logger)
                                         
@@ -1287,7 +1296,7 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                                                             danmaku_file.flush()
                                                         await asyncio.sleep(0.1)
                                                 except Exception as e:
-                                                    print(f"弹幕获取失败: {e}")
+                                                    logger.error(f"弹幕获取失败: {e}")
                                                 finally:
                                                     if danmaku_file:
                                                         danmaku_file.close()
@@ -1298,7 +1307,7 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                                             danmaku_task = threading.Thread(target=lambda: asyncio.run(danmaku_capture_task()))
                                             danmaku_task.daemon = True
                                             danmaku_task.start()
-                                            print(f"[{anchor_name}] 弹幕获取已启动")
+                                            logger.info(f"[{anchor_name}] 弹幕获取已启动")
 
                                 recording.add(record_name)
                                 start_record_time = datetime.datetime.now()

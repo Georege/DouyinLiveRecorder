@@ -174,3 +174,5 @@ config/*
 
 # 关键补充：防止 Git 忽略空目录（如果需要保留 config 目录结构）
 !config/
+
+node_modules/

@@ -165,6 +165,12 @@ async def get_kuaishou_stream_url(json_data: dict, video_quality: str) -> dict:
         "is_live": live_status,
     }
 
+    # 传递room_id和user_id
+    if 'room_id' in json_data:
+        result['room_id'] = json_data['room_id']
+    if 'user_id' in json_data:
+        result['user_id'] = json_data['user_id']
+
     if live_status:
         quality_mapping_bit = {'OD': 99999, 'BD': 4000, 'UHD': 2000, 'HD': 1000, 'SD': 800, 'LD': 600}
         if video_quality in QUALITY_MAPPING:
